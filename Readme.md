@@ -1,199 +1,57 @@
-# Dolphin - A GameCube and Wii Emulator
+## Dolphin Thor Portal
 
-[Homepage](https://dolphin-emu.org/) | [Project Site](https://github.com/dolphin-emu/dolphin) | [Buildbot](https://dolphin.ci/) | [Forums](https://forums.dolphin-emu.org/) | [Wiki](https://wiki.dolphin-emu.org/) | [GitHub Wiki](https://github.com/dolphin-emu/dolphin/wiki) | [Issue Tracker](https://bugs.dolphin-emu.org/projects/emulator/issues) | [Coding Style](https://github.com/dolphin-emu/dolphin/blob/master/Contributing.md) | [Transifex Page](https://app.transifex.com/dolphinemu/dolphin-emu/dashboard/) | [Analytics](https://mon.dolphin-emu.org/)
+This is a simple fork of Dolphin that accomplishes three things:
 
-Dolphin is an emulator for running GameCube and Wii games on Windows,
-Linux, macOS, and recent Android devices. It's licensed under the terms
-of the GNU General Public License, version 2 or later (GPLv2+).
+1. Adds dual screen support for use on the AYN Thor
+2. Adds a significantly improved user interface for the emulated Skylanders Portal of Power on that second screen
+3. Adds a forced offline mode to the emulator settings, which makes Dolphin stop whining about not being able to read a particular SSL certificate when booting many games in the Skylanders series.
 
-Please read the [FAQ](https://dolphin-emu.org/docs/faq/) before using Dolphin.
+## Launching the Portal
 
-## System Requirements
+1. Launch Dolphin like normal.
+2. Launch a Skylanders title of your choosing.
+3. Once the game has loaded, open Dolphin's menu (the back button on your device) and select "Lower-screen portal"
+4. Dolphin will ask which display to use. There should only be one option, so pick that one. (In my experience, it's called "Screen 2 ID-4, but I haven't tested this on another Thor to confirm that that's consistent)
+5. You'll see the main interface of the Portal on the lower screen now.
 
-### Desktop
+## Using the Portal
 
-* OS
-    * Windows (10 1903 or higher).
-    * Linux.
-    * macOS (11.0 Big Sur or higher).
-    * Unix-like systems other than Linux are not officially supported but might work.
-* Processor
-    * A CPU with SSE2 support.
-    * A modern CPU (3 GHz and Dual Core, not older than 2008) is highly recommended.
-* Graphics
-    * A reasonably modern graphics card (Direct3D 11.1 / OpenGL 3.3).
-    * A graphics card that supports Direct3D 11.1 / OpenGL 4.4 is recommended.
+1. After following the above steps, tap on one of the slots you'd like to add a figure to.
+    a. By default, the interface only shows four slots (i.e. a Skylander and an Item, for two players in co-op or arena). The Portal supports up to sixteen slots (presumably for Trap Team and Swap Force... but I haven't played that far). You can access those slots by tapping "All 16 Spots" and paging through.
+2. You'll see that a new interface appears with two options: Existing Saves or Create new save. 
+    a. If you already have Skylanders saved on your device, you'll immediately see them below and can simply tap one to select it. Then, hit "Place saved figure" to add it to the previously selected slot.
+    b. If you have no saved Skylanders, or want to create a new Skylander, tap "Create new save," then find the figure you want to use. Tap it, then hit "Name & create." By default, the save file will be the name of the Skylander, followed by a sequential number if there are duplicates. You have the opportunity to name it something different if you want (i.e. the path you've chosen for that Skylander). Then, hit "Create & place" to proceed.
+3. Once back on the main Portal screen, you can tap a placed figure to remove or replace it. Hitting "Replace" takes you to the previously described menus to pick a different figure to put on the Portal.
 
-### Android
+## File Management
 
-* OS
-    * Android (7.0 Nougat or higher).
-* Processor
-    * A processor with support for 64-bit applications (either ARMv8 or x86-64).
-* Graphics
-    * A graphics processor that supports OpenGL ES 3.0 or higher. Performance varies heavily with [driver quality](https://dolphin-emu.org/blog/2013/09/26/dolphin-emulator-and-opengl-drivers-hall-fameshame/).
-    * A graphics processor that supports standard desktop OpenGL features is recommended for best performance.
+Currently, all .sky files reside in Dolphin Thor Portal's folder on Android, in the "Skylanders" folder. This fork does nothing different from regular Dolphin in terms of the actual emulation itself, meaning you should be able to throw in any pre-existing .sky files into this folder and they'll just work. Similarly, if you want to delete a Skylander's file, just go into this folder and delete the relevant file.
 
-Dolphin can only be installed on devices that satisfy the above requirements. Attempting to install on an unsupported device will fail and display an error message.
+## Offline Mode
 
-## Building
+For some reason, Skylanders and many other Activision titles for the Wii seem to try and connect to the internet (or at least check for an internet connection?) when launched. I suppose this isn't a problem on a real Wii, but Dolphin throws a real hissy fit about it. You'll get an error along the lines of "IOS: Could not read a file required for SSL services. Please refer to https://dolphin-emu.org/docs/guides/wii-network-guide/" Despite the wonderfully helpful network guide giving easy to follow steps and a single button supposedly solving the problem in Dolphin, the error persists. You could, of course, just hit "Ignore for session" and the game continues starting up like normal. But that's annoying! The following steps disable as much of Dolphin's emulated network stack as possible, which seems to make the popup go away. Unfortunately, Skylanders still takes ages to boot, but at least it doesn't hang indefinitely until you close the popup...
 
-You may find building instructions on the appropriate wiki page for your operating system:
+1. Open the Settings menu.
+2. Open Config.
+3. Open Wii.
+4. Enable "Offline Wii Networking."
 
-* [Windows](https://github.com/dolphin-emu/dolphin/wiki/Building-for-Windows)
-* [Linux](https://github.com/dolphin-emu/dolphin/wiki/Building-for-Linux)
-* [macOS](https://github.com/dolphin-emu/dolphin/wiki/Building-for-macOS)
-* [Android](#android-specific-instructions) <!-- TODO: Create a "Building for Android" wiki page and link it here -->
-* [OpenBSD](https://github.com/dolphin-emu/dolphin/wiki/Building-for-OpenBSD) (unsupported)
+## AI Disclosure
 
-Before building, make sure to pull all submodules:
+This fork was entirely vibe coded with Codex. I am not a programmer in the slightest, but I was pretty unhappy with how poorly the UI was done for the emulated Portal on Android specifically. It looks and works pretty great on desktop, with its own dedicated window and all, but the default Android experience was simply untenable. It's literally a single giant dropdown menu! When my mom discovered that she could play one of her favorite games on the Thor, she was ecstatic, but was immediately frustrated by how Dolphin's interface handled arguably the most important part of Skylanders. I hated seeing her so disappointed, so I figured Codex could figure something out. And by golly, it did.
 
-```sh
-git submodule update --init --recursive
-```
 
-### Android-specific instructions
+## Artwork
 
-These instructions assume familiarity with Android development. If you do not have an
-Android dev environment set up, see [AndroidSetup.md](AndroidSetup.md).
+Skylanders card artwork comes from [Skylanders Image Generator](https://github.com/skylandersNFC/Skylanders-Image-Generator/tree/a8c0bde4d3bd89918f30daa5cb04afb28147b115).
 
-If using Android Studio, import the Gradle project located in `./Source/Android`.
+- **Sobersu - Sobersu_Logo:** Spyro's Adventure, Giants and Trap Team.
+- **Mr. Shadow - Mr_Shadow and related styles:** Swap Force, SuperChargers and Imaginators.
 
-Android apps are compiled using a build system called Gradle. Dolphin's native component,
-however, is compiled using CMake. The Gradle script will attempt to run a CMake build
-automatically while building the Java code.
+Original creator credits and the image inventory are preserved in [Assets/SkylandersArtwork](Assets/SkylandersArtwork). Artwork remains credited to its original creators and is separate from Dolphin's code license.
 
-## Uninstalling
+## Source
 
-On Windows, simply remove the extracted directory, unless it was installed with the NSIS installer,
-in which case you can uninstall Dolphin like any other Windows application.
+Based on [Dolphin Emulator](https://github.com/dolphin-emu/dolphin), release **2609a**, revision [`409881c34357d0f105fd473167d15ab0bd9c1628`](https://github.com/dolphin-emu/dolphin/commit/409881c34357d0f105fd473167d15ab0bd9c1628).
 
-Linux users can run `cat install_manifest.txt | xargs -d '\n' rm` as root from the build directory
-to uninstall Dolphin from their system.
-
-macOS users can simply delete Dolphin.app to uninstall it.
-
-Additionally, you'll want to remove the global user directory if you don't plan on reinstalling Dolphin.
-
-## Command Line Usage
-
-```
-Usage: Dolphin.exe [options]... [FILE]...
-
-Options:
-  --version             show program's version number and exit
-  -h, --help            show this help message and exit
-  -u USER, --user=USER  User folder path
-  -m MOVIE, --movie=MOVIE
-                        Play a movie file
-  -e <file>, --exec=<file>
-                        Load the specified file
-  -n <16-character ASCII title ID>, --nand_title=<16-character ASCII title ID>
-                        Launch a NAND title
-  -C <System>.<Section>.<Key>=<Value>, --config=<System>.<Section>.<Key>=<Value>
-                        Set a configuration option
-  -s <file>, --save_state=<file>
-                        Load the initial save state
-  -d, --debugger        Show the debugger pane and additional View menu options
-  -l, --logger          Open the logger
-  -b, --batch           Run Dolphin without the user interface (Requires
-                        --exec or --nand-title)
-  -c, --confirm         Set Confirm on Stop
-  -v VIDEO_BACKEND, --video_backend=VIDEO_BACKEND
-                        Specify a video backend
-  -a AUDIO_EMULATION, --audio_emulation=AUDIO_EMULATION
-                        Choose audio emulation from [HLE|LLE]
-```
-
-Available DSP emulation engines are HLE (High Level Emulation) and
-LLE (Low Level Emulation). HLE is faster but less accurate whereas
-LLE is slower but close to perfect. Note that LLE has two submodes (Interpreter and Recompiler)
-but they cannot be selected from the command line.
-
-Available video backends are "D3D" and "D3D12" (they are only available on Windows), "OGL", and "Vulkan".
-There's also "Null", which will not render anything, and
-"Software Renderer", which uses the CPU for rendering and
-is intended for debugging purposes only.
-
-## DolphinTool Usage
-```
-usage: dolphin-tool COMMAND -h
-
-commands supported: [convert, verify, header, extract]
-```
-
-```
-Usage: convert [options]... [FILE]...
-
-Options:
-  -h, --help            show this help message and exit
-  -u USER, --user=USER  User folder path, required for temporary processing
-                        files.Will be automatically created if this option is
-                        not set.
-  -i FILE, --input=FILE
-                        Path to disc image FILE.
-  -o FILE, --output=FILE
-                        Path to the destination FILE.
-  -f FORMAT, --format=FORMAT
-                        Container format to use. Default is RVZ. [iso|gcz|wia|rvz]
-  -s, --scrub           Scrub junk data as part of conversion.
-  -b BLOCK_SIZE, --block_size=BLOCK_SIZE
-                        Block size for GCZ/WIA/RVZ formats, as an integer.
-                        Suggested value for RVZ: 131072 (128 KiB)
-  -c COMPRESSION, --compression=COMPRESSION
-                        Compression method to use when converting to WIA/RVZ.
-                        Suggested value for RVZ: zstd [none|zstd|bzip|lzma|lzma2]
-  -l COMPRESSION_LEVEL, --compression_level=COMPRESSION_LEVEL
-                        Level of compression for the selected method. Ignored
-                        if 'none'. Suggested value for zstd: 5
-```
-
-```
-Usage: verify [options]...
-
-Options:
-  -h, --help            show this help message and exit
-  -u USER, --user=USER  User folder path, required for temporary processing
-                        files.Will be automatically created if this option is
-                        not set.
-  -i FILE, --input=FILE
-                        Path to disc image FILE.
-  -a ALGORITHM, --algorithm=ALGORITHM
-                        Optional. Compute and print the digest using the
-                        selected algorithm, then exit. [crc32|md5|sha1|rchash]
-```
-
-```
-Usage: header [options]...
-
-Options:
-  -h, --help            show this help message and exit
-  -i FILE, --input=FILE
-                        Path to disc image FILE.
-  -b, --block_size      Optional. Print the block size of GCZ/WIA/RVZ formats,
-then exit.
-  -c, --compression     Optional. Print the compression method of GCZ/WIA/RVZ
-                        formats, then exit.
-  -l, --compression_level
-                        Optional. Print the level of compression for WIA/RVZ
-                        formats, then exit.
-```
-
-```
-Usage: extract [options]...
-
-Options:
-  -h, --help            show this help message and exit
-  -i FILE, --input=FILE
-                        Path to disc image FILE.
-  -o FOLDER, --output=FOLDER
-                        Path to the destination FOLDER.
-  -p PARTITION, --partition=PARTITION
-                        Which specific partition you want to extract.
-  -s SINGLE, --single=SINGLE
-                        Which specific file/directory you want to extract.
-  -l, --list            List all files in volume/partition. Will print the
-                        directory/file specified with --single if defined.
-  -q, --quiet           Mute all messages except for errors.
-  -g, --gameonly        Only extracts the DATA partition.
-```
+Dolphin source code is licensed under the **GNU General Public License, version 2 or later**. See [COPYING](COPYING) and the notices in individual source files.
