@@ -188,6 +188,7 @@ private:
       NET_IOCTL net_type;
       SSL_IOCTL ssl_type;
     };
+    std::chrono::steady_clock::time_point started = std::chrono::steady_clock::now();
   };
 
   enum class ConnectingState

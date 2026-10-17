@@ -110,8 +110,10 @@ std::optional<IPCReply> NetNCDManageDevice::IOCtlV(const IOCtlVRequest& request)
 
   case IOCTLV_NCD_GETLINKSTATUS:
     INFO_LOG_FMT(IOS_NET, "NET_NCD_MANAGE: IOCTLV_NCD_GETLINKSTATUS");
-    // Always connected
-    memory.Write_U32(Net::ConnectionSettings::LINK_WIRED, request.io_vectors.at(0).address + 4);
+    memory.Write_U32(GetEmulationKernel().IsWiiNetworkOffline() ?
+                         Net::ConnectionSettings::LINK_NONE :
+                         Net::ConnectionSettings::LINK_WIRED,
+                     request.io_vectors.at(0).address + 4);
     break;
 
   case IOCTLV_NCD_GETWIRELESSMACADDRESS:

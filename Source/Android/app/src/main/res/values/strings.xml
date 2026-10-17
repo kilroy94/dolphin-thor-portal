@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="wii_offline_networking">Offline Wii Networking</string>
+    <string name="wii_offline_networking_description">Disables internet and LAN access for emulated Wii games and returns offline responses. Stop emulation before changing; applies on the next game start.</string>
 
     <!-- Title of the app -->
     <string name="app_name">Dolphin Emulator</string>
@@ -1064,4 +1066,6 @@ It can efficiently compress both junk data and encrypted Wii data.
     <string name="netplay_transfer_progress">%1$s/%2$s MiB</string>
     <string name="netplay_local_network_permission_info">Dolphin needs permission to connect to devices on a local network. If you only want to use netplay over the internet, the permission is not required.</string>
     <string name="netplay_give_permission">Give permission</string>
+    <string name="second_screen_test">Lower-screen portal</string>
+    <string name="import_portal_copy">Import portal figure copy</string>
 </resources>

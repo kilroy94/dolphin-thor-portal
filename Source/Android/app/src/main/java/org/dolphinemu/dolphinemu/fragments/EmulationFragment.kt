@@ -102,6 +102,7 @@ class EmulationFragment : Fragment(), SurfaceHolder.Callback {
     }
 
     override fun onResume() {
+        org.dolphinemu.dolphinemu.features.secondscreen.ScreenTest.record("upper fragment resume")
         super.onResume()
         if (NativeLibrary.IsGameMetadataValid()) {
             inputOverlay?.refreshControls()
@@ -113,6 +114,7 @@ class EmulationFragment : Fragment(), SurfaceHolder.Callback {
     }
 
     override fun onPause() {
+        org.dolphinemu.dolphinemu.features.secondscreen.ScreenTest.record("upper fragment pause running=${NativeLibrary.IsRunningAndUnpaused()}")
         if (NativeLibrary.IsRunningAndUnpaused() && !NativeLibrary.IsShowingAlertMessage()) {
             Log.debug("[EmulationFragment] Pausing emulation.")
             NativeLibrary.PauseEmulation(true)
@@ -152,6 +154,8 @@ class EmulationFragment : Fragment(), SurfaceHolder.Callback {
     }
 
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
+        org.dolphinemu.dolphinemu.features.secondscreen.ScreenTest.surface = true
+        org.dolphinemu.dolphinemu.features.secondscreen.ScreenTest.record("upper surface changed ${width}x$height")
         Log.debug("[EmulationFragment] Surface changed. Resolution: $width x $height")
         NativeLibrary.SurfaceChanged(holder.surface)
         if (runWhenSurfaceIsValid) {
@@ -160,12 +164,15 @@ class EmulationFragment : Fragment(), SurfaceHolder.Callback {
     }
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
+        org.dolphinemu.dolphinemu.features.secondscreen.ScreenTest.surface = false
+        org.dolphinemu.dolphinemu.features.secondscreen.ScreenTest.record("upper surface destroyed")
         Log.debug("[EmulationFragment] Surface destroyed.")
         NativeLibrary.SurfaceDestroyed()
         runWhenSurfaceIsValid = true
     }
 
     fun stopEmulation() {
+        org.dolphinemu.dolphinemu.features.skylanders.PortalCommands.end()
         Log.debug("[EmulationFragment] Stopping emulation.")
         NativeLibrary.StopEmulation()
     }

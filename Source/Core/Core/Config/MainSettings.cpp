@@ -411,6 +411,8 @@ const Info<bool> MAIN_GBA_SAVES_IN_ROM_PATH{{System::Main, "GBA", "SavesInRomPat
 
 // Main.Network
 
+const Info<bool> MAIN_WII_OFFLINE_NETWORKING{{System::Main, "Network", "OfflineWiiNetworking"},
+                                             false};
 const Info<bool> MAIN_NETWORK_SSL_DUMP_READ{{System::Main, "Network", "SSLDumpRead"}, false};
 const Info<bool> MAIN_NETWORK_SSL_DUMP_WRITE{{System::Main, "Network", "SSLDumpWrite"}, false};
 const Info<bool> MAIN_NETWORK_SSL_VERIFY_CERTIFICATES{

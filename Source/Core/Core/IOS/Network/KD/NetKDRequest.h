@@ -53,9 +53,15 @@ private:
   template <typename Method, typename Request>
   std::optional<IPCReply> LaunchAsyncTask(Method method, const Request& request)
   {
-    m_work_queue.EmplaceItem(AsyncTask{request, std::bind(method, this, request)});
+    m_work_queue.EmplaceItem(AsyncTask{request, [this, method, request] {
+                                         if (GetEmulationKernel().IsWiiNetworkOffline())
+                                           return HandleOfflineNetworkRequest(request);
+                                         return (this->*method)(request);
+                                       }});
     return std::nullopt;
   }
+
+  IPCReply HandleOfflineNetworkRequest(const IOCtlRequest& request);
 
   enum class CurrentFunction : u32
   {

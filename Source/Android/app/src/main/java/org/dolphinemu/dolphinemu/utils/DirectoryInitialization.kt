@@ -15,6 +15,7 @@ import androidx.core.content.edit
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.preference.PreferenceManager
+import org.dolphinemu.dolphinemu.BuildConfig
 import org.dolphinemu.dolphinemu.NativeLibrary
 import org.dolphinemu.dolphinemu.R
 import org.dolphinemu.dolphinemu.features.settings.model.BooleanSetting
@@ -318,6 +319,9 @@ object DirectoryInitialization {
     }
 
     private fun preferLegacyUserDirectory(context: Context): Boolean {
+        if (BuildConfig.THOR_DATA_ISOLATION) {
+            return false
+        }
         return PermissionsHandler.isExternalStorageLegacy() && !PermissionsHandler.isWritePermissionDenied() && isExternalFilesDirEmpty(
             context
         ) && legacyUserDirectoryExists()

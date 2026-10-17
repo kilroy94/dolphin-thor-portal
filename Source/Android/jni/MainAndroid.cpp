@@ -49,6 +49,7 @@
 #include "Core/PowerPC/PowerPC.h"
 #include "Core/State.h"
 #include "Core/System.h"
+#include "Core/IOS/USB/Emulated/Skylanders/Skylander.h"
 #include "jni/NetPlay/NetPlayUICallbacks.h"
 
 #include "DiscIO/Blob.h"
@@ -253,6 +254,7 @@ JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_PauseEmulati
 
 JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_StopEmulation(JNIEnv*, jclass)
 {
+  Core::System::GetInstance().GetSkylanderPortal().EndSession();
   Core::Stop(Core::System::GetInstance());
 
   // Kick the waiting event

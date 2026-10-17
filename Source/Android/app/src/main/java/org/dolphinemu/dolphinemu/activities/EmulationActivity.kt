@@ -31,6 +31,9 @@ import androidx.fragment.app.FragmentManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.slider.Slider
+import org.dolphinemu.dolphinemu.BuildConfig
+import org.dolphinemu.dolphinemu.features.secondscreen.ScreenTest
+import org.dolphinemu.dolphinemu.features.skylanders.PortalCommands
 import org.dolphinemu.dolphinemu.NativeLibrary
 import org.dolphinemu.dolphinemu.R
 import org.dolphinemu.dolphinemu.databinding.ActivityEmulationBinding
@@ -50,6 +53,7 @@ import org.dolphinemu.dolphinemu.features.settings.model.StringSetting
 import org.dolphinemu.dolphinemu.features.settings.ui.MenuTag
 import org.dolphinemu.dolphinemu.features.settings.ui.SettingsActivity
 import org.dolphinemu.dolphinemu.features.skylanders.SkylanderConfig
+import org.dolphinemu.dolphinemu.features.skylanders.DevelopmentSkylanderFiles
 import org.dolphinemu.dolphinemu.features.skylanders.model.Skylander
 import org.dolphinemu.dolphinemu.features.skylanders.ui.SkylanderSlot
 import org.dolphinemu.dolphinemu.features.skylanders.ui.SkylanderSlotAdapter
@@ -76,6 +80,18 @@ class EmulationActivity : AppCompatActivity(), ThemeProvider {
     override var themeId = 0
 
     private var menuVisible = false
+
+    private val importPortalCopy = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) PortalCommands.importCopy(this, uri) { message ->
+            if (!isDestroyed) Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+        }
+    }
+    private val exportDiagnostics = registerForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
+        if (uri != null) ScreenTest.export(this, uri) { message ->
+            if (!isDestroyed) Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+        }
+    }
+    fun exportDiagnosticLog() { exportDiagnostics.launch("dolphin-thor-diagnostics.txt") }
 
     var isActivityRecreated = false
     private var paths: Array<String>? = null
@@ -108,11 +124,28 @@ class EmulationActivity : AppCompatActivity(), ThemeProvider {
         ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         if (uri != null) {
+            val figurePath = try {
+                if (BuildConfig.THOR_DATA_ISOLATION) {
+                    DevelopmentSkylanderFiles.importCopy(this, uri).absolutePath
+                } else {
+                    uri.toString()
+                }
+            } catch (_: java.io.IOException) {
+                Toast.makeText(this, R.string.skylander_load_failed, Toast.LENGTH_SHORT).show()
+                skylanderSlot = -1
+                skylanderData = Skylander.BLANK_SKYLANDER
+                return@registerForActivityResult
+            } catch (_: SecurityException) {
+                Toast.makeText(this, R.string.skylander_load_failed, Toast.LENGTH_SHORT).show()
+                skylanderSlot = -1
+                skylanderData = Skylander.BLANK_SKYLANDER
+                return@registerForActivityResult
+            }
             val slot = SkylanderConfig.loadSkylander(
                 skylanderSlots[skylanderSlot].portalSlot,
-                uri.toString()
+                figurePath
             )
-            if (slot != null && slot.first != null && slot.second != null) {
+            if (slot != null && slot.first != null && slot.first!! in 0..15 && slot.second != null) {
                 clearSkylander(skylanderSlot)
                 skylanderSlots[skylanderSlot].portalSlot = slot.first!!
                 skylanderSlots[skylanderSlot].label = slot.second!!
@@ -217,6 +250,7 @@ class EmulationActivity : AppCompatActivity(), ThemeProvider {
 
         binding = ActivityEmulationBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        ScreenTest.attach(this)
 
         setInsets()
 
@@ -294,15 +328,20 @@ class EmulationActivity : AppCompatActivity(), ThemeProvider {
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
+        ScreenTest.record("upper focus=$hasFocus")
         if (hasFocus) {
             enableFullscreenImmersive()
         }
     }
 
     override fun onResume() {
+        ScreenTest.record("upper resume")
         ThemeHelper.setCorrectTheme(this)
 
         super.onResume()
+
+        if (NativeLibrary.IsGameMetadataValid() && NativeLibrary.IsEmulatingWii() &&
+            BooleanSetting.MAIN_EMULATE_SKYLANDER_PORTAL.boolean) PortalCommands.begin()
 
         // If the whole app process was recreated, directory initialization might not be done yet.
         // If that's the case, we can't read settings, so skip reading the settings for now and do
@@ -322,11 +361,24 @@ class EmulationActivity : AppCompatActivity(), ThemeProvider {
     }
 
     override fun onStop() {
+        ScreenTest.record("upper stop")
         super.onStop()
         settings.saveSettings()
     }
 
+    override fun onPause() {
+        ScreenTest.record("upper pause")
+        super.onPause()
+    }
+
+    override fun onTopResumedActivityChanged(isTopResumedActivity: Boolean) {
+        super.onTopResumedActivityChanged(isTopResumedActivity)
+        ScreenTest.record("upper topResumed=$isTopResumedActivity")
+    }
+
     fun onTitleChanged() {
+        if (NativeLibrary.IsEmulatingWii() && BooleanSetting.MAIN_EMULATE_SKYLANDER_PORTAL.boolean)
+            PortalCommands.begin()
         if (!menuToastShown) {
             // The reason why this doesn't run earlier is because we want to be sure the boot succeeded.
             Toast.makeText(this, R.string.emulation_menu_help, Toast.LENGTH_LONG).show()
@@ -346,6 +398,8 @@ class EmulationActivity : AppCompatActivity(), ThemeProvider {
     }
 
     override fun onDestroy() {
+        PortalCommands.end()
+        ScreenTest.detach(this)
         super.onDestroy()
         settings.close()
     }
@@ -487,6 +541,12 @@ class EmulationActivity : AppCompatActivity(), ThemeProvider {
             MENU_ACTION_RESET_OVERLAY -> resetOverlay()
             MENU_ACTION_TOGGLE_CONTROLS -> toggleControls()
             MENU_ACTION_LATCHING_CONTROLS -> latchingControls()
+            MENU_ACTION_SECOND_SCREEN_TEST -> {
+                closeMenu()
+                if (NativeLibrary.IsGameMetadataValid() && NativeLibrary.IsEmulatingWii() &&
+                    BooleanSetting.MAIN_EMULATE_SKYLANDER_PORTAL.boolean) PortalCommands.begin()
+                ScreenTest.choose(this)
+            }
             MENU_ACTION_ADJUST_SCALE -> adjustScale()
             MENU_ACTION_CHOOSE_CONTROLLER -> chooseController()
             MENU_ACTION_REFRESH_WIIMOTES -> NativeLibrary.RefreshWiimotes()
@@ -522,7 +582,10 @@ class EmulationActivity : AppCompatActivity(), ThemeProvider {
             MENU_SET_IR_MODE -> setIRMode()
             MENU_ACTION_CHOOSE_DOUBLETAP -> chooseDoubleTapButton()
             MENU_ACTION_SETTINGS -> SettingsActivity.launch(this, MenuTag.SETTINGS)
-            MENU_ACTION_SKYLANDERS -> showSkylanderPortalSettings()
+            MENU_ACTION_SKYLANDERS -> {
+                if (BuildConfig.THOR_DATA_ISOLATION) importPortalCopy.launch(arrayOf("*/*"))
+                else showSkylanderPortalSettings()
+            }
             MENU_ACTION_INFINITY_BASE -> showInfinityBaseSettings()
             MENU_ACTION_EXIT -> emulationFragment!!.stopEmulation()
         }
@@ -549,6 +612,7 @@ class EmulationActivity : AppCompatActivity(), ThemeProvider {
 
     // Gets button presses
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        ScreenTest.key(event, menuVisible)
         if (!menuVisible) {
             if (ControllerInterface.dispatchKeyEvent(event)) {
                 return true
@@ -925,6 +989,31 @@ class EmulationActivity : AppCompatActivity(), ThemeProvider {
         skylanderSlot = slot
     }
 
+    fun createSkylanderInDevelopmentCollection() {
+        try {
+            val destination = DevelopmentSkylanderFiles.newFigure(this)
+            val slot: android.util.Pair<Int, String>? = SkylanderConfig.createSkylander(
+                skylanderData.id,
+                skylanderData.variant,
+                destination.absolutePath,
+                skylanderSlots[skylanderSlot].portalSlot
+            )
+            if (slot != null && slot.first in 0..15) {
+                clearSkylander(skylanderSlot)
+                skylanderSlots[skylanderSlot].portalSlot = slot.first
+                skylanderSlots[skylanderSlot].label = slot.second
+                skylandersBinding.figureManager.adapter?.notifyItemChanged(skylanderSlot)
+            } else {
+                Toast.makeText(this, R.string.skylander_load_failed, Toast.LENGTH_SHORT).show()
+            }
+        } catch (_: java.io.IOException) {
+            Toast.makeText(this, R.string.skylander_load_failed, Toast.LENGTH_SHORT).show()
+        } finally {
+            skylanderSlot = -1
+            skylanderData = Skylander.BLANK_SKYLANDER
+        }
+    }
+
     fun clearSkylander(slot: Int) {
         skylanderSlots[slot].label = getString(R.string.skylander_slot, slot + 1)
         skylandersBinding.figureManager.adapter?.notifyItemChanged(slot)
@@ -986,6 +1075,7 @@ class EmulationActivity : AppCompatActivity(), ThemeProvider {
     }
 
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+        ScreenTest.motion(event, menuVisible)
         if (!menuVisible) {
             if (ControllerInterface.dispatchGenericMotionEvent(event)) {
                 return true
@@ -1084,6 +1174,7 @@ class EmulationActivity : AppCompatActivity(), ThemeProvider {
         const val MENU_ACTION_SKYLANDERS = 36
         const val MENU_ACTION_INFINITY_BASE = 37
         const val MENU_ACTION_LATCHING_CONTROLS = 38
+        const val MENU_ACTION_SECOND_SCREEN_TEST = 39
 
         init {
             buttonsActionsMap.apply {

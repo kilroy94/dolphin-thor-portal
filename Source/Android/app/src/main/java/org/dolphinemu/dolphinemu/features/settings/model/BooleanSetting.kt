@@ -139,6 +139,7 @@ enum class BooleanSetting(
         false
     ),
     MAIN_WII_WIILINK_ENABLE(Settings.FILE_DOLPHIN, Settings.SECTION_INI_CORE, "EnableWiiLink", false),
+    MAIN_WII_OFFLINE_NETWORKING(Settings.FILE_DOLPHIN, "Network", "OfflineWiiNetworking", false),
     MAIN_DSP_JIT(Settings.FILE_DOLPHIN, Settings.SECTION_INI_DSP, "EnableJIT", true),
     MAIN_TIME_TRACKING(
         Settings.FILE_DOLPHIN,
@@ -994,6 +995,7 @@ enum class BooleanSetting(
 
     companion object {
         private val NOT_RUNTIME_EDITABLE_ARRAY = arrayOf(
+            MAIN_WII_OFFLINE_NETWORKING,
             MAIN_DSP_HLE,
             MAIN_FASTMEM_ARENA,
             MAIN_LARGE_ENTRY_POINTS_MAP,

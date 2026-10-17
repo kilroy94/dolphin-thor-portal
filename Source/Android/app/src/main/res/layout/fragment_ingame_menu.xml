@@ -103,12 +103,17 @@
 
             <Button
                 android:id="@+id/menu_skylanders"
-                android:text="@string/emulate_skylander_portal"
+                android:text="@string/import_portal_copy"
                 style="@style/InGameMenuOption" />
 
             <Button
                 android:id="@+id/menu_infinity_base"
                 android:text="@string/emulate_infinity_base"
+                style="@style/InGameMenuOption" />
+
+            <Button
+                android:id="@+id/menu_second_screen_test"
+                android:text="@string/second_screen_test"
                 style="@style/InGameMenuOption" />
 
         </LinearLayout>

@@ -48,3 +48,28 @@ CMakeLists.txt.user
 .cache/clangd
 # Ignore CMake user presets
 CMakeUserPresets.json
+
+# Kotlin compiler caches and error reports can contain machine-specific paths.
+.kotlin/
+
+# Local signing material and developer configuration.
+*.keystore
+*.jks
+keystore.properties
+
+# Private workspace material; these are not part of the published fork.
+/local-docs/
+/artifacts/
+/logs/
+/references/
+/windows-demo/
+/ARCHITECTURE.md
+/ARTWORK_EXPANSION.md
+/BUILD_ENVIRONMENT.md
+/COMPACT_UI.md
+/DEVELOPMENT_PLAN.md
+/MILESTONE_*.md
+/OFFLINE_NETWORKING.md
+/RESEARCH.md
+/WINDOWS_DEMO.md
+/GITHUB_PREPARATION.md

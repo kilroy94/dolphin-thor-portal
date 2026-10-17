@@ -723,6 +723,13 @@ void WiiSocket::Update(bool read, bool write, bool except)
           ReturnValue, nonBlock, forceNonBlock);
 
       m_socket_manager.EnqueueIPCReply(it->request, ReturnValue);
+      INFO_LOG_FMT(
+          IOS_NET, "WiiNet socket complete ipc={:08x} ssl={} op={:x} result={} elapsed_us={}",
+          it->request.address, it->is_ssl,
+          it->is_ssl ? static_cast<int>(it->ssl_type) : static_cast<int>(it->net_type), ReturnValue,
+          std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() -
+                                                                it->started)
+              .count());
       it = pending_sockops.erase(it);
     }
     else
@@ -854,6 +861,8 @@ void WiiSocket::ResetTimeout()
 
 void WiiSocket::DoSock(const Request& request, NET_IOCTL type)
 {
+  INFO_LOG_FMT(IOS_NET, "WiiNet socket queued ipc={:08x} ssl=false op={:x}", request.address,
+               static_cast<int>(type));
   sockop so = {request, false};
   so.net_type = type;
   pending_sockops.push_back(so);
@@ -861,6 +870,8 @@ void WiiSocket::DoSock(const Request& request, NET_IOCTL type)
 
 void WiiSocket::DoSock(const Request& request, SSL_IOCTL type)
 {
+  INFO_LOG_FMT(IOS_NET, "WiiNet socket queued ipc={:08x} ssl=true op={:x}", request.address,
+               static_cast<int>(type));
   sockop so = {request, true};
   so.ssl_type = type;
   pending_sockops.push_back(so);
@@ -930,6 +941,12 @@ bool WiiSockMan::IsSocketBlocking(s32 wii_fd) const
 
 s32 WiiSockMan::NewSocket(s32 af, s32 type, s32 protocol)
 {
+  if (m_ios.IsWiiNetworkOffline())
+  {
+    SetLastNetError(-SO_ENETDOWN);
+    INFO_LOG_FMT(IOS_NET, "WiiNet offline socket result={}", -SO_ENETDOWN);
+    return -SO_ENETDOWN;
+  }
   if (af == 2)
   {
     // AF_INET == 2 is true on all systems I've seen,

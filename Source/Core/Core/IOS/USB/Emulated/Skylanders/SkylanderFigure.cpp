@@ -7,6 +7,13 @@
 #include <cstring>
 #include <span>
 #include <string>
+#include <fcntl.h>
+#ifdef _WIN32
+#include <io.h>
+#include <sys/stat.h>
+#else
+#include <unistd.h>
+#endif
 
 #include <mbedtls/aes.h>
 #include <mbedtls/md5.h>
@@ -121,11 +128,43 @@ void SkylanderFigure::Encrypt(std::span<const u8, FIGURE_SIZE> input)
 
   DEBUG_LOG_FMT(IOS_USB, "Encrypted skylander data: \n{}", HexDump(encrypted.data(), FIGURE_SIZE));
 }
-SkylanderFigure::SkylanderFigure(File::IOFile file)
+SkylanderFigure::SkylanderFigure(File::IOFile file, bool initialize_blank)
 {
   m_sky_file = std::move(file);
-  m_sky_file.Seek(0, File::SeekOrigin::Begin);
-  m_sky_file.ReadBytes(m_data.data(), m_data.size());
+  m_data = {};
+  if (!initialize_blank)
+  {
+    m_sky_file.Seek(0, File::SeekOrigin::Begin);
+    m_sky_file.ReadBytes(m_data.data(), m_data.size());
+  }
+}
+
+bool SkylanderFigure::CreateNew(const std::string& path, u16 id, u16 variant)
+{
+  // Reserve the destination atomically. Do not depend on CRT-specific fopen 'x' support.
+#ifdef _WIN32
+  const int descriptor = _wopen(UTF8ToWString(path).c_str(),
+      _O_CREAT | _O_EXCL | _O_RDWR | _O_BINARY, _S_IREAD | _S_IWRITE);
+  std::FILE* stream = descriptor >= 0 ? _fdopen(descriptor, "w+b") : nullptr;
+#else
+  const int descriptor = open(path.c_str(), O_CREAT | O_EXCL | O_RDWR | O_CLOEXEC, 0600);
+  std::FILE* stream = descriptor >= 0 ? fdopen(descriptor, "w+b") : nullptr;
+#endif
+  if (!stream)
+  {
+    if (descriptor >= 0)
+    {
+#ifdef _WIN32
+      _close(descriptor);
+#else
+      close(descriptor);
+#endif
+    }
+    return false;
+  }
+  File::IOFile file(stream);
+  SkylanderFigure figure(std::move(file), true);
+  return figure.Create(id, variant);
 }
 bool SkylanderFigure::Create(u16 sky_id, u16 sky_var,
                              std::optional<std::array<u8, 4>> requested_nuid)
@@ -164,18 +203,52 @@ bool SkylanderFigure::Create(u16 sky_id, u16 sky_var,
 
   PopulateKeys();
 
-  Save();
-  return true;
+  return Save();
 }
-void SkylanderFigure::Save()
+bool SkylanderFigure::Save()
 {
-  m_sky_file.Seek(0, File::SeekOrigin::Begin);
-  m_sky_file.WriteBytes(m_data.data(), FIGURE_SIZE);
+  return m_sky_file.Seek(0, File::SeekOrigin::Begin) &&
+         m_sky_file.WriteBytes(m_data.data(), FIGURE_SIZE) && m_sky_file.Flush();
 }
 
 void SkylanderFigure::GetBlock(u8 index, u8* dest) const
 {
   memcpy(dest, m_data.data() + (index * BLOCK_SIZE), BLOCK_SIZE);
+}
+
+int SkylanderFigure::GetSavedLevel() const
+{
+  std::array<u8, FIGURE_SIZE> data{};
+  DecryptFigure(&data);
+  return ReadSavedLevel(data);
+}
+
+int SkylanderFigure::ReadSavedLevel(std::span<const u8, FIGURE_SIZE> data)
+{
+  const u16 id = data[0x10] | (data[0x11] << 8);
+  const u16 variant = data[0x1c] | (data[0x1d] << 8);
+  const auto entry = list_skylanders.find({id, variant});
+  if (entry == list_skylanders.end() || NormalizeSkylanderType(entry->second.type) != Type::Skylander)
+    return 0;
+  // Read-only XP layout: NefariousTechSupport/Runes Docs/SkylanderFormat.md.
+  const auto newer = [](u8 next, u8 previous) {
+    const u8 distance = static_cast<u8>(next - previous);
+    return distance != 0 && distance < 128;
+  };
+  const size_t a = newer(data[0x249], data[0x89]) ? 0x240 : 0x80;
+  const size_t b = newer(data[0x2d2], data[0x112]) ? 0x2d0 : 0x110;
+  const u32 xp1 = data[a] | (data[a + 1] << 8) | (data[a + 2] << 16);
+  const u32 xp2 = data[b + 3] | (data[b + 4] << 8);
+  const u32 xp3 = static_cast<u32>(data[b + 8]) | (static_cast<u32>(data[b + 9]) << 8) |
+                  (static_cast<u32>(data[b + 10]) << 16) | (static_cast<u32>(data[b + 11]) << 24);
+  if (xp1 > 33000 || xp3 > 101000)
+    return 0;
+  constexpr std::array<u32, 20> thresholds{0, 1000, 2200, 3800, 6000, 9000, 13000, 18200,
+      24800, 33000, 42700, 53900, 66600, 80800, 96500, 115735, 134435, 154635, 176335, 199535};
+  int level = 1;
+  while (level < 20 && xp1 + xp2 + xp3 >= thresholds[level])
+    ++level;
+  return level;
 }
 
 FigureData SkylanderFigure::GetData() const
@@ -419,5 +492,9 @@ void SkylanderFigure::SetBlock(u8 block, const u8* buf)
 bool SkylanderFigure::FileIsOpen() const
 {
   return m_sky_file.IsOpen();
+}
+bool SkylanderFigure::FileIsGood() const
+{
+  return static_cast<bool>(m_sky_file);
 }
 }  // namespace IOS::HLE::USB

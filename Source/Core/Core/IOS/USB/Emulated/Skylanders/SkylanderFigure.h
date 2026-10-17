@@ -61,16 +61,20 @@ class SkylanderFigure
 {
 public:
   SkylanderFigure(const std::string& file_path);
-  SkylanderFigure(File::IOFile file);
+  SkylanderFigure(File::IOFile file, bool initialize_blank = false);
+  static bool CreateNew(const std::string& path, u16 id, u16 variant);
   bool Create(u16 sky_id, u16 sky_var,
               std::optional<std::array<u8, 4>> requested_nuid = std::nullopt);
-  void Save();
+  bool Save();
   void Close();
   bool FileIsOpen() const;
+  bool FileIsGood() const;
   void GetBlock(u8 index, u8* dest) const;
   void SetBlock(u8 block, const u8* buf);
   void DecryptFigure(std::array<u8, FIGURE_SIZE>* dest) const;
   FigureData GetData() const;
+  int GetSavedLevel() const;
+  static int ReadSavedLevel(std::span<const u8, FIGURE_SIZE> decrypted);
   void SetData(FigureData* data);
 
 private:

@@ -167,6 +167,9 @@ public:
   void UpdateWantDeterminism(bool new_want_determinism);
 
   std::shared_ptr<WiiSockMan> GetSocketManager();
+  // Immutable for this IOS instance, including its network worker threads. Not restored from
+  // states.
+  bool IsWiiNetworkOffline() const { return m_wii_network_offline; }
 
   void HandleIPCEvent(u64 userdata);
   void UpdateIPC();
@@ -198,6 +201,8 @@ private:
   std::optional<IPCReply> OpenDevice(OpenRequest& request);
 
   Core::System& m_system;
+
+  const bool m_wii_network_offline;
 
   static constexpr u8 IPC_MAX_FDS = 0x18;
   std::map<std::string, std::shared_ptr<Device>, std::less<>> m_device_map;

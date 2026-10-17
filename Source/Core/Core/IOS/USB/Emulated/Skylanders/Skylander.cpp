@@ -1281,28 +1281,38 @@ bool SkylanderPortal::RemoveSkylander(u8 sky_num)
 
   DEBUG_LOG_FMT(IOS_USB, "Cleared Skylander from slot {}", sky_num);
   std::lock_guard lock(sky_mutex);
+  return RemoveSkylanderLocked(sky_num);
+}
+
+bool SkylanderPortal::RemoveSkylanderLocked(u8 sky_num)
+{
   auto& skylander = skylanders[sky_num];
 
-  if (skylander.figure->FileIsOpen())
-  {
-    skylander.figure->Save();
-    skylander.figure->Close();
-  }
+  if (!skylander.figure || !skylander.figure->FileIsOpen())
+    return false;
 
-  if (skylander.status & Skylander::READY)
-  {
-    skylander.status = Skylander::REMOVING;
-    skylander.queued_status.push(Skylander::REMOVING);
-    skylander.queued_status.push(Skylander::REMOVED);
-    return true;
-  }
+  if (!skylander.figure->Save())
+    return false;
+  skylander.figure->Close();
 
-  return false;
+  // A queued status may temporarily say REMOVED while a figure is still open.
+  // Always append removal to the existing transitions rather than dropping them.
+  skylander.status = Skylander::REMOVING;
+  skylander.queued_status.push(Skylander::REMOVING);
+  skylander.queued_status.push(Skylander::REMOVED);
+  return true;
 }
 
 u8 SkylanderPortal::LoadSkylander(std::unique_ptr<SkylanderFigure> figure)
 {
   std::lock_guard lock(sky_mutex);
+  return LoadSkylanderLocked(std::move(figure));
+}
+
+u8 SkylanderPortal::LoadSkylanderLocked(std::unique_ptr<SkylanderFigure> figure)
+{
+  if (!figure || !figure->FileIsGood())
+    return 0xFF;
 
   u32 sky_serial = 0;
   std::array<u8, 0x10> block = {};
@@ -1343,8 +1353,110 @@ u8 SkylanderPortal::LoadSkylander(std::unique_ptr<SkylanderFigure> figure)
     skylander.queued_status.push(Skylander::ADDED);
     skylander.queued_status.push(Skylander::READY);
     skylander.last_id = sky_serial;
+    skylander.instance = ++m_next_instance;
   }
   return found_slot;
+}
+
+u64 SkylanderPortal::BeginSession()
+{
+  std::lock_guard lock(sky_mutex);
+  m_session_active = true;
+  return ++m_session;
+}
+
+void SkylanderPortal::EndSession()
+{
+  std::lock_guard lock(sky_mutex);
+  m_session_active = false;
+}
+
+std::optional<std::array<SkylanderPortal::SlotSnapshot, MAX_SKYLANDERS>>
+SkylanderPortal::Snapshot(u64 session)
+{
+  std::lock_guard lock(sky_mutex);
+  if (!m_session_active || session != m_session)
+    return std::nullopt;
+  std::array<SlotSnapshot, MAX_SKYLANDERS> result{};
+  for (size_t i = 0; i < result.size(); ++i)
+  {
+    const auto& sky = skylanders[i];
+    auto& copy = result[i];
+    copy.present = sky.figure && sky.figure->FileIsOpen();
+    copy.status = sky.status;
+    copy.pending = static_cast<u32>(sky.queued_status.size());
+    copy.serial = sky.last_id;
+    copy.instance = sky.instance;
+    if (copy.present)
+    {
+      std::array<u8, BLOCK_SIZE> block{};
+      sky.figure->GetBlock(1, block.data());
+      copy.id = static_cast<u16>(block[0] | (block[1] << 8));
+      copy.variant = static_cast<u16>(block[12] | (block[13] << 8));
+      for (u8 index = 0; index < BLOCK_COUNT; ++index)
+        sky.figure->GetBlock(index, copy.figure_data.data() + index * BLOCK_SIZE);
+    }
+  }
+  return result;
+}
+
+SkylanderPortal::CommandResult SkylanderPortal::RemoveFigure(u64 session, int slot,
+                                                           u64 expected_instance)
+{
+  std::lock_guard lock(sky_mutex);
+  if (!m_session_active || session != m_session)
+    return {CommandCode::StaleSession};
+  if (slot < 0 || slot >= MAX_SKYLANDERS)
+    return {CommandCode::InvalidSlot};
+  const auto& sky = skylanders[slot];
+  if (!sky.figure || !sky.figure->FileIsOpen())
+    return {CommandCode::EmptySlot};
+  if (sky.instance != expected_instance)
+    return {CommandCode::StaleSlot};
+  if (!RemoveSkylanderLocked(static_cast<u8>(slot)))
+    return {CommandCode::FileError};
+  return {CommandCode::Success, slot, sky.instance};
+}
+
+SkylanderPortal::CommandResult SkylanderPortal::InsertFigure(
+    u64 session, int replace_slot, u64 expected_instance, std::unique_ptr<SkylanderFigure> figure)
+{
+  std::lock_guard lock(sky_mutex);
+  if (!m_session_active || session != m_session)
+    return {CommandCode::StaleSession};
+  if (replace_slot < -1 || replace_slot >= MAX_SKYLANDERS)
+    return {CommandCode::InvalidSlot};
+  if (!figure || !figure->FileIsGood())
+    return {CommandCode::InvalidFigure};
+  if (replace_slot >= 0)
+  {
+    const auto& target = skylanders[replace_slot];
+    if (!target.figure || !target.figure->FileIsOpen())
+      return {CommandCode::EmptySlot};
+    if (target.instance != expected_instance)
+      return {CommandCode::StaleSlot};
+  }
+  std::array<u8, BLOCK_SIZE> block{};
+  figure->GetBlock(0, block.data());
+  const u32 serial = static_cast<u32>(block[0]) | (static_cast<u32>(block[1]) << 8) |
+                     (static_cast<u32>(block[2]) << 16) | (static_cast<u32>(block[3]) << 24);
+  bool room = replace_slot >= 0;
+  for (const auto& sky : skylanders)
+  {
+    // Never open a second writable instance of the same figure, including replacing itself.
+    if (sky.figure && sky.figure->FileIsOpen() && sky.last_id == serial)
+      return {CommandCode::DuplicateFigure};
+    room |= (sky.status & 1) == 0;
+  }
+  if (!room)
+    return {CommandCode::Full};
+  // Validation has completed. USB status/query/write operations cannot interleave this pair.
+  if (replace_slot >= 0 && !RemoveSkylanderLocked(static_cast<u8>(replace_slot)))
+    return {CommandCode::FileError};
+  const u8 actual_slot = LoadSkylanderLocked(std::move(figure));
+  if (actual_slot == 0xFF)
+    return {CommandCode::Full};
+  return {CommandCode::Success, actual_slot, skylanders[actual_slot].instance};
 }
 
 bool SkylanderPortal::IsSkylanderNumberValid(u8 sky_num)

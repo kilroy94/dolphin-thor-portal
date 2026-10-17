@@ -13,6 +13,7 @@ import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import org.dolphinemu.dolphinemu.BuildConfig
 import org.dolphinemu.dolphinemu.R
 import org.dolphinemu.dolphinemu.activities.EmulationActivity
 import org.dolphinemu.dolphinemu.databinding.DialogCreateSkylanderBinding
@@ -84,7 +85,11 @@ class SkylanderSlotAdapter(
                     val name = SkylanderConfig.LIST_SKYLANDERS[SkylanderPair(id, variant)]
                     val title = if (name != null) "$name.sky" else "Unknown(ID: $id Variant: $variant).sky"
                     activity.setSkylanderData(id, variant, name ?: "Unknown", position)
-                    activity.requestCreateSkylander.launch(title)
+                    if (BuildConfig.THOR_DATA_ISOLATION) {
+                        activity.createSkylanderInDevelopmentCollection()
+                    } else {
+                        activity.requestCreateSkylander.launch(title)
+                    }
                     createDialog.dismiss()
                 } else {
                     Toast.makeText(

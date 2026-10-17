@@ -36,11 +36,13 @@ android {
     }
 
     defaultConfig {
-        applicationId = "org.dolphinemu.dolphinemu"
+        applicationId = "org.dolphinemu.dolphinemu.thor"
+        buildConfigField("boolean", "THOR_DATA_ISOLATION", "true")
         minSdk = 24
         targetSdk = 37
 
-        versionCode = getBuildVersionCode()
+        // Monotonic development updates from the accepted Milestone 1 APK.
+        versionCode = getBuildVersionCode() + 9
 
         versionName = getGitVersion()
 
@@ -81,7 +83,7 @@ android {
         // Signed by debug key disallowing distribution on Play Store.
         // Attaches "debug" suffix to version and package name, allowing installation alongside the release build.
         debug {
-            resValue("string", "app_name_suffixed", "Dolphin Debug")
+            resValue("string", "app_name_suffixed", "Dolphin Thor Portal")
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
             isJniDebuggable = true
@@ -91,10 +93,11 @@ android {
     externalNativeBuild {
         cmake {
             path = file("../../../CMakeLists.txt")
-            version = "3.25.0+"
+            version = "3.31.6"
         }
     }
     namespace = "org.dolphinemu.dolphinemu"
+    sourceSets.getByName("main").assets.srcDir("../../../Assets/SkylandersArtwork")
 
     defaultConfig {
         ndk {

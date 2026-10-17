@@ -4,6 +4,7 @@
 #pragma once
 
 #include <map>
+#include <optional>
 #include <mutex>
 #include <queue>
 #include <vector>
@@ -109,6 +110,7 @@ struct Skylander final
   u8 status = 0;
   std::queue<u8> queued_status;
   u32 last_id = 0;
+  u64 instance = 0;
 
   enum : u8
   {
@@ -129,6 +131,34 @@ struct SkylanderLEDColor final
 class SkylanderPortal final
 {
 public:
+  struct SlotSnapshot
+  {
+    bool present = false;
+    u8 status = 0;
+    u32 pending = 0;
+    u16 id = 0;
+    u16 variant = 0;
+    u32 serial = 0;
+    u64 instance = 0;
+    std::array<u8, FIGURE_SIZE> figure_data{};
+  };
+  enum class CommandCode
+  {
+    Success = 0, InvalidSlot, EmptySlot, Full, StaleSession, StaleSlot, InvalidFigure,
+    DuplicateFigure, FileError
+  };
+  struct CommandResult
+  {
+    CommandCode code;
+    int slot = -1;
+    u64 instance = 0;
+  };
+  u64 BeginSession();
+  void EndSession();
+  std::optional<std::array<SlotSnapshot, MAX_SKYLANDERS>> Snapshot(u64 session);
+  CommandResult InsertFigure(u64 session, int replace_slot, u64 expected_instance,
+                             std::unique_ptr<SkylanderFigure> figure);
+  CommandResult RemoveFigure(u64 session, int slot, u64 expected_instance);
   void Activate();
   void Deactivate();
   bool IsActivated();
@@ -145,6 +175,11 @@ public:
   std::pair<u16, u16> CalculateIDs(const std::array<u8, 0x40 * 0x10>& file_data);
 
 private:
+  bool RemoveSkylanderLocked(u8 sky_num);
+  u8 LoadSkylanderLocked(std::unique_ptr<SkylanderFigure> figure);
+  u64 m_session = 0;
+  bool m_session_active = false;
+  u64 m_next_instance = 0;
   static bool IsSkylanderNumberValid(u8 sky_num);
   static bool IsBlockNumberValid(u8 block);
 

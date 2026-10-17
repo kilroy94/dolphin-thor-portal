@@ -306,9 +306,11 @@ Kernel::Kernel(u64 title_id) : m_title_id(title_id)
 }
 
 EmulationKernel::EmulationKernel(Core::System& system, u64 title_id)
-    : Kernel(title_id), m_system(system)
+    : Kernel(title_id), m_system(system),
+      m_wii_network_offline(Config::Get(Config::MAIN_WII_OFFLINE_NETWORKING))
 {
   INFO_LOG_FMT(IOS, "Starting IOS {:016x}", title_id);
+  INFO_LOG_FMT(IOS_NET, "Wii networking: offline={}", m_wii_network_offline);
 
   if (!SetupMemory(m_system.GetMemory(), title_id, MemorySetupType::IOSReload))
     WARN_LOG_FMT(IOS, "No information about this IOS -- cannot set up memory values");

@@ -17,6 +17,7 @@
 #include "Core/Config/MainSettings.h"
 #include "Core/Core.h"
 #include "Core/HW/Memmap.h"
+#include "Core/IOS/Network/RequestTrace.h"
 #include "Core/IOS/Network/Socket.h"
 #include "Core/PowerPC/PowerPC.h"
 #include "Core/System.h"
@@ -155,6 +156,7 @@ constexpr std::array<u8, 32> s_root_ca_hash = {{0xc5, 0xb0, 0xf8, 0xdf, 0xce, 0x
 static std::vector<u8> ReadCertFile(const std::string& path, const std::array<u8, 32>& correct_hash,
                                     bool silent)
 {
+  const NetworkRequestTrace trace("certificate (includes any dialog wait)", 0, 0);
   File::IOFile file(path, "rb");
   std::vector<u8> bytes(file.GetSize());
   if (!file.ReadBytes(bytes.data(), bytes.size()))
@@ -189,6 +191,20 @@ static std::vector<u8> ReadCertFile(const std::string& path, const std::array<u8
 
 std::optional<IPCReply> NetSSLDevice::IOCtlV(const IOCtlVRequest& request)
 {
+  const NetworkRequestTrace trace("SSL ioctlv", request.address, request.request);
+  if (GetEmulationKernel().IsWiiNetworkOffline())
+  {
+    // SSL uses the first INPUT vector for its result, separate from the IPC transport result.
+    if (request.in_vectors.empty() || request.in_vectors[0].size < sizeof(s32))
+      return IPCReply(IPC_EINVAL);
+    // NEW never allocates a session, so every subsequent session ID is invalid. In particular,
+    // do not enter entropy seeding, certificate loading, BIO setup, or the handshake queue.
+    const s32 result = request.request == IOCTLV_NET_SSL_NEW ? SSL_ERR_FAILED : SSL_ERR_ID;
+    WriteReturnValue(GetSystem().GetMemory(), result, request.in_vectors[0].address);
+    INFO_LOG_FMT(IOS_NET, "WiiNet offline SSL ipc={:08x} op={:x} result={}", request.address,
+                 request.request, result);
+    return IPCReply(IPC_SUCCESS);
+  }
   u32 BufferIn = 0, BufferIn2 = 0, BufferIn3 = 0;
   u32 BufferInSize = 0, BufferInSize2 = 0, BufferInSize3 = 0;
 

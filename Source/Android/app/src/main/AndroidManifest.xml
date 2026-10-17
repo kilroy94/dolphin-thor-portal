@@ -39,7 +39,7 @@
         android:requestLegacyExternalStorage="true"
         android:preserveLegacyExternalStorage="true"
         android:enableOnBackInvokedCallback="false"
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:fullBackupContent="@xml/backup_rules"
         android:dataExtractionRules="@xml/backup_rules_api_31"
         android:supportsRtl="true"
@@ -181,6 +181,13 @@
             </intent-filter>
         </provider>
 
+        <activity
+            android:name=".features.secondscreen.ScreenTestActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:resizeableActivity="true"
+            android:taskAffinity="${applicationId}.secondary"
+            android:theme="@android:style/Theme.Material.NoActionBar" />
     </application>
 
 </manifest>

@@ -26,6 +26,7 @@
 #include "Core/IOS/FS/FileSystem.h"
 #include "Core/IOS/Network/KD/NetKDTime.h"
 #include "Core/IOS/Network/KD/VFF/VFFUtil.h"
+#include "Core/IOS/Network/RequestTrace.h"
 #include "Core/IOS/Network/Socket.h"
 #include "Core/IOS/Uids.h"
 #include "Core/System.h"
@@ -160,6 +161,7 @@ NetKDRequestDevice::NetKDRequestDevice(EmulationKernel& ios, const std::string& 
   m_scheduler_buffer[1] = Common::swap32(-1);
 
   m_work_queue.Reset("WiiConnect24 Worker", [this](const AsyncTask& task) {
+    const NetworkRequestTrace trace("KD worker", task.request.address, 0);
     const IPCReply reply = task.handler();
     {
       std::lock_guard lg(m_async_reply_lock);
@@ -207,6 +209,9 @@ void NetKDRequestDevice::Update()
 
 void NetKDRequestDevice::SchedulerTimer()
 {
+  // Keep the KD service and its request/reply worker, but never schedule background traffic.
+  if (GetEmulationKernel().IsWiiNetworkOffline())
+    return;
   u32 mail_time_state = 0;
   u32 download_time_state = 0;
   Common::SetCurrentThreadName("KD Scheduler Timer");
@@ -239,6 +244,8 @@ void NetKDRequestDevice::SchedulerTimer()
 
 void NetKDRequestDevice::SchedulerWorker(const SchedulerEvent event)
 {
+  if (GetEmulationKernel().IsWiiNetworkOffline())
+    return;
   if (event == SchedulerEvent::Download)
   {
     u16 entry_index{};
@@ -343,6 +350,8 @@ void NetKDRequestDevice::LogError(ErrorType error_type, s32 error_code)
 
 NWC24::ErrorCode NetKDRequestDevice::KDCheckMail(u32* mail_flag, u32* interval)
 {
+  if (GetEmulationKernel().IsWiiNetworkOffline())
+    return NWC24::WC24_ERR_NETWORK;
   bool success = false;
   Common::ScopeGuard state_guard([&] {
     std::lock_guard lg(m_scheduler_buffer_lock);
@@ -511,6 +520,8 @@ NWC24::ErrorCode NetKDRequestDevice::DetermineSubtask(u16 entry_index,
 
 NWC24::ErrorCode NetKDRequestDevice::KDSendMail()
 {
+  if (GetEmulationKernel().IsWiiNetworkOffline())
+    return NWC24::WC24_ERR_NETWORK;
   bool success = false;
   Common::ScopeGuard exit_guard([&] {
     std::lock_guard lg(m_scheduler_buffer_lock);
@@ -639,6 +650,8 @@ NWC24::ErrorCode NetKDRequestDevice::KDSendMail()
 NWC24::ErrorCode NetKDRequestDevice::KDDownload(const u16 entry_index,
                                                 const std::optional<u8> subtask_id)
 {
+  if (GetEmulationKernel().IsWiiNetworkOffline())
+    return NWC24::WC24_ERR_NETWORK;
   bool success = false;
   Common::ScopeGuard state_guard([&] {
     const u64 current_utc = m_time_device->GetAdjustedUTC();
@@ -993,8 +1006,24 @@ IPCReply NetKDRequestDevice::HandleRequestRegisterUserId(const IOS::HLE::IOCtlRe
   return IPCReply{IPC_SUCCESS};
 }
 
+IPCReply NetKDRequestDevice::HandleOfflineNetworkRequest(const IOCtlRequest& request)
+{
+  if (!request.buffer_out || request.buffer_out_size < sizeof(s32))
+    return IPCReply(IPC_EINVAL);
+  auto& memory = GetSystem().GetMemory();
+  WriteReturnValue(memory, NWC24::WC24_ERR_NETWORK, request.buffer_out);
+  if (request.buffer_out_size >= 8)
+    memory.Write_U32(0, request.buffer_out + 4);
+  if (request.buffer_out_size >= 12)
+    memory.Write_U32(0, request.buffer_out + 8);
+  INFO_LOG_FMT(IOS_NET, "WiiNet offline KD ipc={:08x} op={:x} result={}", request.address,
+               request.request, static_cast<s32>(NWC24::WC24_ERR_NETWORK));
+  return IPCReply(IPC_SUCCESS);
+}
+
 std::optional<IPCReply> NetKDRequestDevice::IOCtl(const IOCtlRequest& request)
 {
+  const NetworkRequestTrace trace("KD ioctl", request.address, request.request);
   enum : u32
   {
     IOCTL_NWC24_SUSPEND_SCHEDULER = 0x01,

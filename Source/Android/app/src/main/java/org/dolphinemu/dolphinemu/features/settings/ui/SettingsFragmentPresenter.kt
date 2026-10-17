@@ -878,6 +878,14 @@ class SettingsFragmentPresenter(
     }
 
     private fun addWiiSettings(sl: ArrayList<SettingsItem>) {
+        sl.add(
+            SwitchSetting(
+                context,
+                BooleanSetting.MAIN_WII_OFFLINE_NETWORKING,
+                R.string.wii_offline_networking,
+                R.string.wii_offline_networking_description
+            )
+        )
         sl.add(HeaderSetting(context, R.string.wii_misc_settings, 0))
         sl.add(
             SingleChoiceSetting(

@@ -233,6 +233,7 @@ static constexpr std::size_t GBPLAYER_GBA_INDEX = 4;
 
 // Main.Network
 
+extern const Info<bool> MAIN_WII_OFFLINE_NETWORKING;
 extern const Info<bool> MAIN_NETWORK_SSL_DUMP_READ;
 extern const Info<bool> MAIN_NETWORK_SSL_DUMP_WRITE;
 extern const Info<bool> MAIN_NETWORK_SSL_VERIFY_CERTIFICATES;

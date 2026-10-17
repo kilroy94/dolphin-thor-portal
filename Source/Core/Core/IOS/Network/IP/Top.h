@@ -67,6 +67,7 @@ class NetIPTopDevice : public EmulationDevice
 {
 public:
   NetIPTopDevice(EmulationKernel& ios, const std::string& device_name);
+  ~NetIPTopDevice() override;
 
   void DoState(PointerWrap& p) override;
   std::optional<IPCReply> IOCtl(const IOCtlRequest& request) override;

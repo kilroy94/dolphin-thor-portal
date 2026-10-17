@@ -29,6 +29,7 @@
 #include "Core/HW/Memmap.h"
 #include "Core/IOS/Network/ICMP.h"
 #include "Core/IOS/Network/MACUtils.h"
+#include "Core/IOS/Network/RequestTrace.h"
 #include "Core/IOS/Network/Socket.h"
 #include "Core/System.h"
 #include "Core/WC24PatchEngine.h"
@@ -91,12 +92,20 @@ NetIPTopDevice::NetIPTopDevice(EmulationKernel& ios, const std::string& device_n
     : EmulationDevice(ios, device_name)
 {
   m_work_queue.Reset("Network Worker", [this](const AsyncTask& task) {
+    const NetworkRequestTrace trace("IP worker", task.request.address, 0);
     const IPCReply reply = task.handler();
     {
       std::lock_guard lg(m_async_reply_lock);
       m_async_replies.emplace(AsyncReply{task.request, reply.return_value});
     }
   });
+}
+
+NetIPTopDevice::~NetIPTopDevice()
+{
+  // The worker captures this and writes to m_async_replies/m_async_reply_lock. Join it before
+  // those later-declared members are destroyed, rather than relying on its member destructor.
+  m_work_queue.Shutdown();
 }
 
 void NetIPTopDevice::DoState(PointerWrap& p)
@@ -477,6 +486,7 @@ static DefaultInterface GetSystemDefaultInterfaceOrFallback()
 
 std::optional<IPCReply> NetIPTopDevice::IOCtl(const IOCtlRequest& request)
 {
+  const NetworkRequestTrace trace("IP ioctl", request.address, request.request);
   if (Core::WantsDeterminism())
   {
     return IPCReply(IPC_EACCES);
@@ -534,6 +544,7 @@ std::optional<IPCReply> NetIPTopDevice::IOCtl(const IOCtlRequest& request)
 
 std::optional<IPCReply> NetIPTopDevice::IOCtlV(const IOCtlVRequest& request)
 {
+  const NetworkRequestTrace trace("IP ioctlv", request.address, request.request);
   switch (request.request)
   {
   case IOCTLV_SO_GETINTERFACEOPT:
@@ -623,6 +634,12 @@ IPCReply NetIPTopDevice::HandleCloseRequest(const IOCtlRequest& request)
 
 std::optional<IPCReply> NetIPTopDevice::HandleDoSockRequest(const IOCtlRequest& request)
 {
+  if (GetEmulationKernel().IsWiiNetworkOffline())
+  {
+    // Keep the normal deferred IPC completion contract for connect/accept/bind/fcntl.
+    GetEmulationKernel().EnqueueIPCReply(request, -SO_ENETDOWN);
+    return std::nullopt;
+  }
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
 
@@ -803,6 +820,8 @@ IPCReply NetIPTopDevice::HandleGetPeerNameRequest(const IOCtlRequest& request)
 
 IPCReply NetIPTopDevice::HandleGetHostIDRequest(const IOCtlRequest& request)
 {
+  if (GetEmulationKernel().IsWiiNetworkOffline())
+    return IPCReply(0);  // No assigned IPv4 address.
   const DefaultInterface net_interface = GetSystemDefaultInterfaceOrFallback();
   const u32 host_ip = ntohl(net_interface.inet.s_addr);
   INFO_LOG_FMT(IOS_NET, "IOCTL_SO_GETHOSTID = {}.{}.{}.{}", host_ip >> 24, (host_ip >> 16) & 0xFF,
@@ -812,6 +831,8 @@ IPCReply NetIPTopDevice::HandleGetHostIDRequest(const IOCtlRequest& request)
 
 IPCReply NetIPTopDevice::HandleInetAToNRequest(const IOCtlRequest& request)
 {
+  if (GetEmulationKernel().IsWiiNetworkOffline())
+    return IPCReply(0);  // This API uses 0 for lookup failure, not a negative socket errno.
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
 
@@ -880,6 +901,11 @@ IPCReply NetIPTopDevice::HandleInetNToPRequest(const IOCtlRequest& request)
 
 std::optional<IPCReply> NetIPTopDevice::HandlePollRequest(const IOCtlRequest& request)
 {
+  if (GetEmulationKernel().IsWiiNetworkOffline())
+  {
+    GetEmulationKernel().EnqueueIPCReply(request, -SO_ENETDOWN);
+    return std::nullopt;
+  }
   auto sm = GetEmulationKernel().GetSocketManager();
 
   if (!request.buffer_in || !request.buffer_out)
@@ -926,6 +952,8 @@ std::optional<IPCReply> NetIPTopDevice::HandlePollRequest(const IOCtlRequest& re
 
 IPCReply NetIPTopDevice::HandleGetHostByNameRequest(const IOCtlRequest& request)
 {
+  if (GetEmulationKernel().IsWiiNetworkOffline())
+    return IPCReply(-1);  // Preserve this API's existing resolver-failure result.
   if (request.buffer_out_size != 0x460)
   {
     ERROR_LOG_FMT(IOS_NET, "Bad buffer size for IOCTL_SO_GETHOSTBYNAME");
@@ -1052,6 +1080,12 @@ IPCReply NetIPTopDevice::HandleGetInterfaceOptRequest(const IOCtlVRequest& reque
   {
   case 0xb003:  // dns server table
   {
+    if (GetEmulationKernel().IsWiiNetworkOffline())
+    {
+      memory.Write_U32(0, request.io_vectors[0].address);
+      memory.Write_U32(0, request.io_vectors[0].address + 4);
+      break;
+    }
     const u32 default_main_dns_resolver = ntohl(::inet_addr("8.8.8.8"));
     const u32 default_backup_dns_resolver = ntohl(::inet_addr("8.8.4.4"));
     u32 address = 0;
@@ -1160,7 +1194,8 @@ IPCReply NetIPTopDevice::HandleGetInterfaceOptRequest(const IOCtlVRequest& reque
   }
 
   case 0x1005:  // link state
-    memory.Write_U32(1, request.io_vectors[0].address);
+    memory.Write_U32(GetEmulationKernel().IsWiiNetworkOffline() ? 0 : 1,
+                     request.io_vectors[0].address);
     break;
 
   case 0x3001:  // hardcoded value
@@ -1168,11 +1203,17 @@ IPCReply NetIPTopDevice::HandleGetInterfaceOptRequest(const IOCtlVRequest& reque
     break;
 
   case 0x4002:  // ip addr numberHandle
-    memory.Write_U32(1, request.io_vectors[0].address);
+    memory.Write_U32(GetEmulationKernel().IsWiiNetworkOffline() ? 0 : 1,
+                     request.io_vectors[0].address);
     break;
 
   case 0x4003:  // ip addr table
   {
+    if (GetEmulationKernel().IsWiiNetworkOffline())
+    {
+      memory.Write_U32(0, request.io_vectors[1].address);  // Empty table.
+      break;
+    }
     // XXX: this isn't exactly right; the buffer can be larger than 12 bytes,
     // in which case, depending on some interface settings, SO can write 12 more bytes
     memory.Write_U32(0xC, request.io_vectors[1].address);
@@ -1191,6 +1232,11 @@ IPCReply NetIPTopDevice::HandleGetInterfaceOptRequest(const IOCtlVRequest& reque
 
   case 0x4006:  // get routing table
   {
+    if (GetEmulationKernel().IsWiiNetworkOffline())
+    {
+      memory.Write_U32(0, request.io_vectors[1].address);
+      break;
+    }
     const DefaultInterface net_interface = GetSystemDefaultInterfaceOrFallback();
     for (InterfaceRouting route : net_interface.routing_table)
     {
@@ -1239,6 +1285,11 @@ IPCReply NetIPTopDevice::HandleGetInterfaceOptRequest(const IOCtlVRequest& reque
 
 std::optional<IPCReply> NetIPTopDevice::HandleSendToRequest(const IOCtlVRequest& request)
 {
+  if (GetEmulationKernel().IsWiiNetworkOffline())
+  {
+    GetEmulationKernel().EnqueueIPCReply(request, -SO_ENETDOWN);
+    return std::nullopt;
+  }
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
 
@@ -1249,6 +1300,11 @@ std::optional<IPCReply> NetIPTopDevice::HandleSendToRequest(const IOCtlVRequest&
 
 std::optional<IPCReply> NetIPTopDevice::HandleRecvFromRequest(const IOCtlVRequest& request)
 {
+  if (GetEmulationKernel().IsWiiNetworkOffline())
+  {
+    GetEmulationKernel().EnqueueIPCReply(request, -SO_ENETDOWN);
+    return std::nullopt;
+  }
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
 
@@ -1259,6 +1315,8 @@ std::optional<IPCReply> NetIPTopDevice::HandleRecvFromRequest(const IOCtlVReques
 
 IPCReply NetIPTopDevice::HandleGetAddressInfoRequest(const IOCtlVRequest& request)
 {
+  if (GetEmulationKernel().IsWiiNetworkOffline())
+    return IPCReply(SO_ERROR_HOST_NOT_FOUND);
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
 
@@ -1366,6 +1424,8 @@ IPCReply NetIPTopDevice::HandleGetAddressInfoRequest(const IOCtlVRequest& reques
 
 IPCReply NetIPTopDevice::HandleICMPPingRequest(const IOCtlVRequest& request)
 {
+  if (GetEmulationKernel().IsWiiNetworkOffline())
+    return IPCReply(-SO_ENETDOWN);
   struct
   {
     u8 length;
