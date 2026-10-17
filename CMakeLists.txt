@@ -23,6 +23,15 @@ set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 
 project(dolphin-emu)
 
+if(ANDROID)
+  # Keep developer machine paths out of native log strings and debug information in APKs.
+  add_compile_options(
+    "-ffile-prefix-map=${CMAKE_SOURCE_DIR}=."
+    "-ffile-prefix-map=${CMAKE_BINARY_DIR}=build"
+    "-ffile-prefix-map=${CMAKE_ANDROID_NDK}=android-ndk"
+  )
+endif()
+
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/CMake)
 
 # Support functions
