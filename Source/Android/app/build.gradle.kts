@@ -103,7 +103,8 @@ android {
         ndk {
             // We only officially support arm64-v8a and x86_64.
             // If you want to try building other ABIs anyway, you need -DENABLE_GENERIC=ON.
-            abiFilters += listOf("arm64-v8a", "x86_64") //, "armeabi-v7a", "x86"
+            val targetAbi = providers.gradleProperty("thorTargetAbi").orNull
+            abiFilters += targetAbi?.let { listOf(it) } ?: listOf("arm64-v8a", "x86_64")
         }
 
         externalNativeBuild {
